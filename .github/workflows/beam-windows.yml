@@ -151,3 +151,38 @@ jobs:
           name: beam-windows-x64-portable
           path: ./Output/beam-${{ env.VERSION }}-x64-portable.exe
           if-no-files-found: error
+
+      # key_confirmed is only written after the rendezvous server answers
+      # RegisterPk with OK, so it proves the ID is registered online.
+      - name: Smoke test - goes online and registers its ID
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path ./rustdesk/rustdesk.exe).Path
+          $server = Start-Process -FilePath $exe -ArgumentList "--server" -PassThru
+          $root = Join-Path $env:APPDATA "RustDesk"
+          $online = $false
+          $id = ""
+          for ($i = 0; $i -lt 36; $i++) {
+            Start-Sleep -Seconds 5
+            $toml = Get-ChildItem $root -Recurse -Filter "RustDesk.toml" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($toml) {
+              $m = Select-String -Path $toml.FullName -Pattern "^id\s*=\s*'(\d+)'" | Select-Object -First 1
+              if ($m) { $id = $m.Matches[0].Groups[1].Value }
+              if (Select-String -Path $toml.FullName -Pattern '^key_confirmed\s*=\s*true' -Quiet) { $online = $true; break }
+            }
+          }
+          Write-Host "ID: $id"
+          Write-Host "Registered with public server: $online"
+          Get-ChildItem (Join-Path $root "log") -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.Name)"; Get-Content $_.FullName -Tail 40 }
+          Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          if ($id -notmatch '^\d{9,10}$') { throw "No valid ID: '$id'" }
+          if (-not $online) { throw "Did not register with the public server within 3 minutes" }
+
+      - name: Smoke test - portable exe is a valid Windows program
+        shell: pwsh
+        run: |
+          $p = Get-Item ./Output/beam-${{ env.VERSION }}-x64-portable.exe
+          $head = [System.IO.File]::ReadAllBytes($p.FullName)[0..1]
+          Write-Host ("Size: {0:N1} MB" -f ($p.Length / 1MB))
+          if ([char]$head[0] -ne 'M' -or [char]$head[1] -ne 'Z') { throw "Not a Windows executable" }
+          if ($p.Length -lt 10MB) { throw "Portable exe is suspiciously small" }
