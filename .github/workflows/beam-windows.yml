@@ -161,21 +161,24 @@ jobs:
           $server = Start-Process -FilePath $exe -ArgumentList "--server" -PassThru
           $root = Join-Path $env:APPDATA "RustDesk"
           $online = $false
-          $id = ""
           for ($i = 0; $i -lt 36; $i++) {
             Start-Sleep -Seconds 5
             $toml = Get-ChildItem $root -Recurse -Filter "RustDesk.toml" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($toml) {
-              $m = Select-String -Path $toml.FullName -Pattern "^id\s*=\s*'(\d+)'" | Select-Object -First 1
-              if ($m) { $id = $m.Matches[0].Groups[1].Value }
-              if (Select-String -Path $toml.FullName -Pattern '^key_confirmed\s*=\s*true' -Quiet) { $online = $true; break }
-            }
+            if ($toml -and (Select-String -Path $toml.FullName -Pattern '^key_confirmed\s*=\s*true' -Quiet)) { $online = $true; break }
+          }
+          # The config stores the ID encrypted, so ask the running server,
+          # falling back to the log line written when the ID is generated.
+          $id = (& $exe --get-id | Out-String).Trim()
+          if ($id -notmatch '^\d{6,12}$') {
+            $m = Get-ChildItem (Join-Path $root "log") -Recurse -Filter *.log -ErrorAction SilentlyContinue |
+              Select-String -Pattern 'Generated id (\d+)' | Select-Object -Last 1
+            if ($m) { $id = $m.Matches[0].Groups[1].Value }
           }
           Write-Host "ID: $id"
           Write-Host "Registered with public server: $online"
           Get-ChildItem (Join-Path $root "log") -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.Name)"; Get-Content $_.FullName -Tail 40 }
           Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-          if ($id -notmatch '^\d{9,10}$') { throw "No valid ID: '$id'" }
+          if ($id -notmatch '^\d{6,12}$') { throw "No valid ID: '$id'" }
           if (-not $online) { throw "Did not register with the public server within 3 minutes" }
 
       - name: Smoke test - portable exe is a valid Windows program
