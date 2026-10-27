@@ -29,13 +29,17 @@ function Refresh-Path {
                 "$env:USERPROFILE\.cargo\bin;$LlvmBin;$Tools\flutter\bin"
 }
 
+# Probes must tolerate tools that print to stderr on success (rustup does),
+# which "Stop" would otherwise turn into a failed check.
 function Works($exe, [string[]]$arguments) {
+    $ErrorActionPreference = "Continue"
     try { & $exe @arguments *> $null; return $LASTEXITCODE -eq 0 } catch { return $false }
 }
 
 # Windows ships a 'python' stub that only opens the Store, and a fresh install
 # is often not on PATH yet, so ask a real interpreter for its own path.
 function Find-Python {
+    $ErrorActionPreference = "Continue"
     $probe = "import sys; print(sys.executable)"
     foreach ($try in @({ py -3 -c $probe }, { python -c $probe })) {
         try {
