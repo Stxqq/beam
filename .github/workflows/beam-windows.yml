@@ -159,11 +159,13 @@ jobs:
         run: |
           $exe = (Resolve-Path ./rustdesk/rustdesk.exe).Path
           $server = Start-Process -FilePath $exe -ArgumentList "--server" -PassThru
-          $root = Join-Path $env:APPDATA "RustDesk"
+          # APP_NAME names the config dir, so finding Beam.toml under
+          # %APPDATA%\Beam also proves the branding took effect.
+          $root = Join-Path $env:APPDATA "Beam"
           $online = $false
           for ($i = 0; $i -lt 36; $i++) {
             Start-Sleep -Seconds 5
-            $toml = Get-ChildItem $root -Recurse -Filter "RustDesk.toml" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $toml = Get-ChildItem $root -Recurse -Filter "Beam.toml" -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($toml -and (Select-String -Path $toml.FullName -Pattern '^key_confirmed\s*=\s*true' -Quiet)) { $online = $true; break }
           }
           # The config stores the ID encrypted, so ask the running server,
@@ -178,6 +180,7 @@ jobs:
           Write-Host "Registered with public server: $online"
           Get-ChildItem (Join-Path $root "log") -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.Name)"; Get-Content $_.FullName -Tail 40 }
           Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          if (-not (Test-Path $root)) { throw "Branding not applied: no $root (found RustDesk dir: $(Test-Path (Join-Path $env:APPDATA 'RustDesk')))" }
           if ($id -notmatch '^\d{6,12}$') { throw "No valid ID: '$id'" }
           if (-not $online) { throw "Did not register with the public server within 3 minutes" }
 

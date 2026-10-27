@@ -2658,6 +2658,17 @@ pub fn get_builtin_option(key: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Beam branding. Runs before anything reads APP_NAME, which also names the
+/// config dir and IPC pipe. The theme is pinned to light because the ink
+/// accent is unreadable on the dark theme.
+pub fn apply_beam_branding() {
+    *config::APP_NAME.write().unwrap() = "Beam".to_owned();
+    config::OVERWRITE_LOCAL_SETTINGS
+        .write()
+        .unwrap()
+        .insert(keys::OPTION_THEME.to_owned(), "light".to_owned());
+}
+
 #[inline]
 pub fn is_custom_client() -> bool {
     get_app_name() != "RustDesk"
